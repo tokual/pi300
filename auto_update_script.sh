@@ -33,6 +33,31 @@ else
     echo "No updates available."
 fi
 
+# Self-manage cron job - ensure it's set to run every 2 minutes
+CRON_JOB="*/2 * * * * $SCRIPT_DIR/$SCRIPT_NAME"
+
+# Get current crontab for user
+CURRENT_CRON=$(crontab -l 2>/dev/null || true)
+
+# Check if the cron job is already present
+if echo "$CURRENT_CRON" | grep -Fq "$CRON_JOB"; then
+    echo "Cron job already set correctly."
+else
+    # Remove any existing line that runs this script (in case timing changed)
+    NEW_CRON=$(echo "$CURRENT_CRON" | grep -v "$SCRIPT_DIR/$SCRIPT_NAME")
+    
+    # Add the new cron job line
+    if [ -n "$NEW_CRON" ]; then
+        NEW_CRON="$NEW_CRON\n$CRON_JOB"
+    else
+        NEW_CRON="$CRON_JOB"
+    fi
+    
+    # Install the new crontab
+    echo -e "$NEW_CRON" | crontab -
+    echo "Cron job updated/added: runs every 2 minutes."
+fi
+
 # Your additional tasks can go here
 # For example, future Python script execution:
 # python3 /path/to/your/python_script.py
