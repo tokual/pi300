@@ -45,8 +45,8 @@ else
     echo "No updates available."
 fi
 
-# Self-manage cron job - ensure it's set to run every 5 minutes
-CRON_JOB="*/5 * * * * $SCRIPT_DIR/$SCRIPT_NAME >> /home/pi300/script.log 2>&1"
+# Self-manage cron job - ensure it's set to run every 3 minutes
+CRON_JOB="*/3 * * * * $SCRIPT_DIR/$SCRIPT_NAME >> /home/pi300/script.log 2>&1"
 
 # Get current crontab for user
 CURRENT_CRON=$(crontab -l 2>/dev/null || true)
@@ -66,7 +66,7 @@ if echo "$CURRENT_CRON" | grep -Fq "$SCRIPT_DIR/$SCRIPT_NAME"; then
         fi
         
         echo -e "$NEW_CRON" | crontab -
-        echo "Cron job updated: runs every 5 minutes with logging."
+        echo "Cron job updated: runs every 3 minutes with logging."
     fi
 else
     echo "Adding new cron job..."
@@ -77,7 +77,7 @@ else
     fi
     
     echo -e "$NEW_CRON" | crontab -
-    echo "Cron job added: runs every 5 minutes with logging."
+    echo "Cron job added: runs every 3 minutes with logging."
 fi
 
 # Run the setup script to install dependencies
