@@ -11,7 +11,7 @@ load_dotenv()
 # Telegram API credentials from environment variables
 API_ID = os.getenv('API_ID')
 API_HASH = os.getenv('API_HASH')
-PHONE_NUMBER = os.getenv('PHONE_NUMBER')
+BOT_TOKEN = os.getenv('BOT_TOKEN')
 
 # Channel configuration from environment variables
 SOURCE_CHANNEL = os.getenv('SOURCE_CHANNEL')
@@ -23,10 +23,11 @@ FORWARDED_MESSAGES_FILE = os.getenv('FORWARDED_MESSAGES_FILE', 'forwarded_messag
 class TelegramForwarder:
     def __init__(self):
         # Validate required environment variables
-        if not all([API_ID, API_HASH, PHONE_NUMBER, SOURCE_CHANNEL, TARGET_CHANNEL]):
+        if not all([API_ID, API_HASH, BOT_TOKEN, SOURCE_CHANNEL, TARGET_CHANNEL]):
             raise ValueError("Missing required environment variables. Check your .env file.")
         
-        self.client = TelegramClient('session', API_ID, API_HASH)
+        # Initialize client with bot token
+        self.client = TelegramClient('bot_session', API_ID, API_HASH)
         self.forwarded_messages = self.load_forwarded_messages()
     
     def load_forwarded_messages(self):
@@ -34,7 +35,8 @@ class TelegramForwarder:
         if os.path.exists(FORWARDED_MESSAGES_FILE):
             try:
                 with open(FORWARDED_MESSAGES_FILE, 'r') as f:
-                    return set(json.load(f))
+                    data = json.load(f)
+                    return set(data) if data else set()
             except (json.JSONDecodeError, FileNotFoundError):
                 return set()
         return set()
@@ -44,11 +46,22 @@ class TelegramForwarder:
         with open(FORWARDED_MESSAGES_FILE, 'w') as f:
             json.dump(list(self.forwarded_messages), f)
     
+    def is_first_run(self):
+        """Check if this is the first run (empty or non-existent JSON file)"""
+        return len(self.forwarded_messages) == 0
+    
     async def forward_new_messages(self):
         """Forward new messages from source to target channel"""
         try:
-            # Get recent messages from source channel (last 50 messages)
-            messages = await self.client.get_messages(SOURCE_CHANNEL, limit=50)
+            # Determine how many messages to check based on first run
+            if self.is_first_run():
+                print("First run detected - will only forward the latest message")
+                limit = 1  # Only get the latest message on first run
+            else:
+                limit = 50  # Normal operation - check last 50 messages
+            
+            # Get recent messages from source channel
+            messages = await self.client.get_messages(SOURCE_CHANNEL, limit=limit)
             
             new_messages_count = 0
             
@@ -69,11 +82,16 @@ class TelegramForwarder:
                         
                         print(f"Forwarded message ID {message.id}")
                         
-                        # Small delay to avoid rate limiting
-                        await asyncio.sleep(1)
+                        # Rate limiting: Wait between forwards to avoid hitting limits[1][5]
+                        if new_messages_count > 1:
+                            await asyncio.sleep(2)  # 2 second delay between messages
                         
                     except Exception as e:
                         print(f"Error forwarding message ID {message.id}: {e}")
+                        # If we hit rate limits, wait longer
+                        if "Too Many Requests" in str(e):
+                            print("Rate limit hit, waiting 60 seconds...")
+                            await asyncio.sleep(60)
             
             # Save the updated list
             self.save_forwarded_messages()
@@ -88,8 +106,9 @@ class TelegramForwarder:
     
     async def run(self):
         """Main execution method"""
-        await self.client.start(phone=PHONE_NUMBER)
-        print("Connected to Telegram")
+        # Start the client with bot token
+        await self.client.start(bot_token=BOT_TOKEN)
+        print("Connected to Telegram as bot")
         
         try:
             await self.forward_new_messages()
