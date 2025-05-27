@@ -2,15 +2,23 @@
 
 # Directory of the repo
 REPO_DIR="/home/pi300/pi300"
+VENV_DIR="/home/pi300/pi300/venv"
+
 cd "$REPO_DIR"
 
 echo "Updating requirements.txt..."
 
-# Install pipreqs if not already installed
-pip3 install pipreqs --quiet
+# Create virtual environment if it doesn't exist
+if [ ! -d "$VENV_DIR" ]; then
+    echo "Creating Python virtual environment..."
+    python3 -m venv "$VENV_DIR"
+fi
+
+# Activate virtual environment and install pipreqs
+source "$VENV_DIR/bin/activate"
+pip install pipreqs --quiet
 
 # Generate requirements.txt based on actual imports in .py files
-# This only includes packages that are actually used in your code
 pipreqs . --force --print > requirements_new.txt
 
 # Check if generation was successful
@@ -27,3 +35,5 @@ else
     # Clean up failed attempt
     [ -f "requirements_new.txt" ] && rm requirements_new.txt
 fi
+
+deactivate
