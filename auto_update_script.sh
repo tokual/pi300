@@ -12,6 +12,8 @@ cd "$REPO_DIR" || {
     echo "Repository directory not found. Cloning repository..."
     git clone "$REPO_URL" "$REPO_DIR"
     cd "$REPO_DIR"
+    # Configure git pull behavior for new repos
+    git config pull.rebase false
 }
 
 # Fetch the latest changes from remote
@@ -23,6 +25,12 @@ REMOTE_COMMIT=$(git rev-parse origin/main)
 
 if [ "$LOCAL_COMMIT" != "$REMOTE_COMMIT" ]; then
     echo "Updates found. Pulling latest changes..."
+    
+    # Configure git pull behavior if not already set
+    if ! git config pull.rebase >/dev/null 2>&1; then
+        git config pull.rebase false
+    fi
+    
     git pull origin main
     
     # Copy the updated script to the execution location
@@ -42,7 +50,7 @@ else
 fi
 
 # Self-manage cron job - ensure it's set to run every 2 minutes
-CRON_JOB="*/5 * * * * $SCRIPT_DIR/$SCRIPT_NAME >> /home/pi300/script.log 2>&1"
+CRON_JOB="*/2 * * * * $SCRIPT_DIR/$SCRIPT_NAME >> /home/pi300/script.log 2>&1"
 
 # Get current crontab for user
 CURRENT_CRON=$(crontab -l 2>/dev/null || true)
@@ -99,9 +107,13 @@ if [ -f "main.py" ]; then
     else
         echo "Virtual environment not found, creating it first..."
         bash "$SETUP_SCRIPT"
-        source "$VENV_DIR/bin/activate"
-        python3 main.py
-        deactivate
+        if [ -d "$VENV_DIR" ]; then
+            source "$VENV_DIR/bin/activate"
+            python3 main.py
+            deactivate
+        else
+            echo "Failed to create virtual environment"
+        fi
     fi
     echo "main.py execution completed."
 else
