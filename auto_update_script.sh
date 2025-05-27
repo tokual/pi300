@@ -34,7 +34,7 @@ else
 fi
 
 # Self-manage cron job - ensure it's set to run every 2 minutes
-CRON_JOB="*/3 * * * * $SCRIPT_DIR/$SCRIPT_NAME"
+CRON_JOB="*/2 * * * * $SCRIPT_DIR/$SCRIPT_NAME"
 
 # Get current crontab for user
 CURRENT_CRON=$(crontab -l 2>/dev/null || true)
@@ -58,6 +58,13 @@ else
     echo "Cron job updated/added: runs every 2 minutes."
 fi
 
-# Your additional tasks can go here
-# For example, future Python script execution:
-# python3 /path/to/your/python_script.py
+# Execute the main Python script
+echo "Executing main.py..."
+cd "$REPO_DIR"
+
+if [ -f "main.py" ]; then
+    python3 main.py
+    echo "main.py execution completed."
+else
+    echo "Warning: main.py not found in repository."
+fi
