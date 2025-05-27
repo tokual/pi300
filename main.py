@@ -11,7 +11,7 @@ load_dotenv()
 # Telegram API credentials from environment variables
 API_ID = os.getenv('API_ID')
 API_HASH = os.getenv('API_HASH')
-BOT_TOKEN = os.getenv('BOT_TOKEN')
+PHONE_NUMBER = os.getenv('PHONE_NUMBER')  # Add this back
 
 # Channel configuration from environment variables
 SOURCE_CHANNEL = os.getenv('SOURCE_CHANNEL')
@@ -23,11 +23,11 @@ FORWARDED_MESSAGES_FILE = os.getenv('FORWARDED_MESSAGES_FILE', 'forwarded_messag
 class TelegramForwarder:
     def __init__(self):
         # Validate required environment variables
-        if not all([API_ID, API_HASH, BOT_TOKEN, SOURCE_CHANNEL, TARGET_CHANNEL]):
+        if not all([API_ID, API_HASH, PHONE_NUMBER, SOURCE_CHANNEL, TARGET_CHANNEL]):
             raise ValueError("Missing required environment variables. Check your .env file.")
         
-        # Initialize client with bot token
-        self.client = TelegramClient('bot_session', API_ID, API_HASH)
+        # Initialize client for user account
+        self.client = TelegramClient('user_session', API_ID, API_HASH)
         self.forwarded_messages = self.load_forwarded_messages()
     
     def load_forwarded_messages(self):
@@ -60,7 +60,7 @@ class TelegramForwarder:
             else:
                 limit = 50  # Normal operation - check last 50 messages
             
-            # Get recent messages from source channel
+            # Get recent messages from source channel (this works with user accounts)
             messages = await self.client.get_messages(SOURCE_CHANNEL, limit=limit)
             
             new_messages_count = 0
@@ -82,13 +82,12 @@ class TelegramForwarder:
                         
                         print(f"Forwarded message ID {message.id}")
                         
-                        # Rate limiting: Wait between forwards to avoid hitting limits[1][5]
+                        # Rate limiting: Wait between forwards
                         if new_messages_count > 1:
-                            await asyncio.sleep(2)  # 2 second delay between messages
+                            await asyncio.sleep(2)
                         
                     except Exception as e:
                         print(f"Error forwarding message ID {message.id}: {e}")
-                        # If we hit rate limits, wait longer
                         if "Too Many Requests" in str(e):
                             print("Rate limit hit, waiting 60 seconds...")
                             await asyncio.sleep(60)
@@ -106,9 +105,9 @@ class TelegramForwarder:
     
     async def run(self):
         """Main execution method"""
-        # Start the client with bot token
-        await self.client.start(bot_token=BOT_TOKEN)
-        print("Connected to Telegram as bot")
+        # Start the client with phone number (user account)
+        await self.client.start(phone=PHONE_NUMBER)
+        print("Connected to Telegram as user")
         
         try:
             await self.forward_new_messages()
