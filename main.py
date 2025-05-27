@@ -82,90 +82,104 @@ class TelegramForwarder:
             print(f"Failed to send bot notification: {e}")
             return False
     
+    async def is_session_valid(self):
+        """Check if the existing session is valid without triggering interactive login"""
+        try:
+            await self.user_client.connect()
+            
+            # Check if user is authorized without triggering interactive login
+            if await self.user_client.is_user_authorized():
+                print("Session is valid.")
+                return True
+            else:
+                print("Session exists but user is not authorized.")
+                return False
+                
+        except Exception as e:
+            print(f"Session validation failed: {e}")
+            return False
+    
     async def setup_session_if_needed(self):
-        """Set up session if it doesn't exist"""
-        if not self.session_exists():
-            print("No session file found. Setting up authentication...")
-            print("This is a one-time setup process.")
-            
-            # Check if we're running in an automated environment (cron)
-            if not sys.stdin.isatty():
-                print("ERROR: Cannot authenticate in automated environment (cron job).")
-                
-                # Send bot notification about authentication needed
-                await self.send_bot_notification(
-                    "🚨 Telegram Forwarder Alert 🚨\n\n"
-                    "User session has expired and requires re-authentication.\n"
-                    "Please run the following command manually:\n\n"
-                    "cd /home/pi300/pi300 && python3 main.py\n\n"
-                    "The automated forwarding has been paused until re-authentication is complete."
-                )
-                
-                raise RuntimeError("Authentication required but running in non-interactive mode")
-            
-            try:
-                # Start the client and handle authentication
-                await self.user_client.start(phone=PHONE_NUMBER)
-                print("Authentication successful! Session file created.")
-                print("Future runs will use this session automatically.")
-                
-                # Test the connection
-                me = await self.user_client.get_me()
-                print(f"Logged in as: {me.first_name} {me.last_name or ''} (@{me.username or 'no username'})")
-                
-                # Send success notification
-                await self.send_bot_notification(
-                    "✅ Telegram Forwarder Authenticated ✅\n\n"
-                    f"Successfully logged in as: {me.first_name} {me.last_name or ''}\n"
-                    "Automated message forwarding is now active."
-                )
-                
+        """Set up session if it doesn't exist or is invalid"""
+        # First, check if we have a valid session
+        if self.session_exists():
+            if await self.is_session_valid():
                 return True
-                
-            except Exception as e:
-                print(f"Authentication failed: {e}")
-                
-                # Send failure notification
-                await self.send_bot_notification(
-                    "❌ Telegram Forwarder Authentication Failed ❌\n\n"
-                    f"Error: {str(e)}\n\n"
-                    "Please check your credentials and try manual authentication:\n"
-                    "cd /home/pi300/pi300 && python3 main.py"
-                )
-                
-                # Clean up partial session file if authentication failed
-                if os.path.exists('user_session.session'):
-                    os.remove('user_session.session')
-                raise
-        else:
-            try:
-                print("Using existing session file.")
-                await self.user_client.start()
-                return True
-                
-            except (AuthKeyUnregisteredError, Exception) as e:
-                print(f"Session expired or invalid: {e}")
-                
-                # Remove expired session file
-                if os.path.exists('user_session.session'):
-                    os.remove('user_session.session')
-                
-                # Send notification about expired session
-                await self.send_bot_notification(
-                    "⚠️ Telegram Forwarder Session Expired ⚠️\n\n"
-                    "Your user session has expired and needs to be renewed.\n"
-                    "Please run the following command manually to re-authenticate:\n\n"
-                    "cd /home/pi300/pi300 && python3 main.py\n\n"
-                    "Automated forwarding will resume after re-authentication."
-                )
-                
-                # If running in cron, exit gracefully
-                if not sys.stdin.isatty():
-                    raise RuntimeError("Session expired and running in non-interactive mode")
-                
-                # If running manually, try to re-authenticate
-                print("Attempting re-authentication...")
-                return await self.setup_session_if_needed()
+            else:
+                print("Removing invalid session file...")
+                # Disconnect first
+                if self.user_client.is_connected():
+                    await self.user_client.disconnect()
+                # Remove invalid session files
+                for session_file in ['user_session.session', 'user_session.session-journal']:
+                    if os.path.exists(session_file):
+                        os.remove(session_file)
+                        print(f"Removed {session_file}")
+        
+        # If we reach here, we need to create a new session
+        print("No valid session found. Setting up authentication...")
+        print("This is a one-time setup process.")
+        
+        # Check if we're running in an automated environment (cron)
+        if not sys.stdin.isatty():
+            print("ERROR: Cannot authenticate in automated environment (cron job).")
+            
+            # Send bot notification about authentication needed
+            await self.send_bot_notification(
+                "🚨 Telegram Forwarder Alert 🚨\n\n"
+                "User session has expired and requires re-authentication.\n"
+                "Please run the following command manually:\n\n"
+                "cd /home/pi300/pi300 && python3 main.py\n\n"
+                "The automated forwarding has been paused until re-authentication is complete."
+            )
+            
+            raise RuntimeError("Authentication required but running in non-interactive mode")
+        
+        try:
+            # Create a fresh client for authentication
+            auth_client = TelegramClient('user_session', API_ID, API_HASH)
+            
+            # Start with phone number for new authentication
+            await auth_client.start(phone=PHONE_NUMBER)
+            print("Authentication successful! Session file created.")
+            
+            # Test the connection
+            me = await auth_client.get_me()
+            print(f"Logged in as: {me.first_name} {me.last_name or ''} (@{me.username or 'no username'})")
+            
+            # Disconnect the auth client
+            await auth_client.disconnect()
+            
+            # Now reconnect with our main client using the new session
+            self.user_client = TelegramClient('user_session', API_ID, API_HASH)
+            await self.user_client.connect()
+            
+            # Send success notification
+            await self.send_bot_notification(
+                "✅ Telegram Forwarder Authenticated ✅\n\n"
+                f"Successfully logged in as: {me.first_name} {me.last_name or ''}\n"
+                "Automated message forwarding is now active."
+            )
+            
+            return True
+            
+        except Exception as e:
+            print(f"Authentication failed: {e}")
+            
+            # Send failure notification
+            await self.send_bot_notification(
+                "❌ Telegram Forwarder Authentication Failed ❌\n\n"
+                f"Error: {str(e)}\n\n"
+                "Please check your credentials and try manual authentication:\n"
+                "cd /home/pi300/pi300 && python3 main.py"
+            )
+            
+            # Clean up partial session files if authentication failed
+            for session_file in ['user_session.session', 'user_session.session-journal']:
+                if os.path.exists(session_file):
+                    os.remove(session_file)
+            
+            raise
     
     async def forward_new_messages(self):
         """Forward new messages from source to target channel"""
@@ -238,7 +252,8 @@ class TelegramForwarder:
             await self.forward_new_messages()
             
         finally:
-            await self.user_client.disconnect()
+            if self.user_client and self.user_client.is_connected():
+                await self.user_client.disconnect()
             if self.bot_client and self.bot_client.is_connected():
                 await self.bot_client.disconnect()
 
