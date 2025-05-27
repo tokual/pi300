@@ -24,14 +24,10 @@ LOCAL_COMMIT=$(git rev-parse HEAD)
 REMOTE_COMMIT=$(git rev-parse origin/main)
 
 if [ "$LOCAL_COMMIT" != "$REMOTE_COMMIT" ]; then
-    echo "Updates found. Pulling latest changes..."
+    echo "Updates found. Force resetting to remote changes..."
     
-    # Configure git pull behavior if not already set
-    if ! git config pull.rebase >/dev/null 2>&1; then
-        git config pull.rebase false
-    fi
-    
-    git pull origin main
+    # Force reset local changes to match remote (override any local modifications)
+    git reset --hard origin/main
     
     # Copy the updated script to the execution location
     cp "$REPO_DIR/$SCRIPT_NAME" "$SCRIPT_DIR/$SCRIPT_NAME"
@@ -49,7 +45,7 @@ else
     echo "No updates available."
 fi
 
-# Self-manage cron job - ensure it's set to run every 2 minutes
+# Self-manage cron job - ensure it's set to run every 5 minutes
 CRON_JOB="*/5 * * * * $SCRIPT_DIR/$SCRIPT_NAME >> /home/pi300/script.log 2>&1"
 
 # Get current crontab for user
@@ -70,7 +66,7 @@ if echo "$CURRENT_CRON" | grep -Fq "$SCRIPT_DIR/$SCRIPT_NAME"; then
         fi
         
         echo -e "$NEW_CRON" | crontab -
-        echo "Cron job updated: runs every 2 minutes with logging."
+        echo "Cron job updated: runs every 5 minutes with logging."
     fi
 else
     echo "Adding new cron job..."
@@ -81,7 +77,7 @@ else
     fi
     
     echo -e "$NEW_CRON" | crontab -
-    echo "Cron job added: runs every 2 minutes with logging."
+    echo "Cron job added: runs every 5 minutes with logging."
 fi
 
 # Run the setup script to install dependencies
