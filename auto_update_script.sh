@@ -5,6 +5,7 @@ SCRIPT_DIR="/home/pi300"
 SCRIPT_NAME="auto_update_script.sh"
 REPO_URL="https://github.com/tokual/pi300.git"
 REPO_DIR="/home/pi300/pi300"
+VENV_DIR="/home/pi300/pi300/venv"
 
 # Navigate to the repository directory
 cd "$REPO_DIR" || {
@@ -41,42 +42,36 @@ else
 fi
 
 # Self-manage cron job - ensure it's set to run every 2 minutes
-CRON_JOB="*/1 * * * * $SCRIPT_DIR/$SCRIPT_NAME >> /home/pi300/script.log 2>&1"
+CRON_JOB="*/2 * * * * $SCRIPT_DIR/$SCRIPT_NAME >> /home/pi300/script.log 2>&1"
 
 # Get current crontab for user
 CURRENT_CRON=$(crontab -l 2>/dev/null || true)
 
 # Check if the cron job is already present
 if echo "$CURRENT_CRON" | grep -Fq "$SCRIPT_DIR/$SCRIPT_NAME"; then
-    # Check if the current cron job matches exactly what we want
     if echo "$CURRENT_CRON" | grep -Fq "$CRON_JOB"; then
         echo "Cron job already set correctly."
     else
         echo "Cron job needs updating..."
-        # Remove any existing line that runs this script
         NEW_CRON=$(echo "$CURRENT_CRON" | grep -v "$SCRIPT_DIR/$SCRIPT_NAME")
         
-        # Add the new cron job line
         if [ -n "$NEW_CRON" ]; then
             NEW_CRON="$NEW_CRON\n$CRON_JOB"
         else
             NEW_CRON="$CRON_JOB"
         fi
         
-        # Install the new crontab
         echo -e "$NEW_CRON" | crontab -
         echo "Cron job updated: runs every 2 minutes with logging."
     fi
 else
     echo "Adding new cron job..."
-    # Add the new cron job line
     if [ -n "$CURRENT_CRON" ]; then
         NEW_CRON="$CURRENT_CRON\n$CRON_JOB"
     else
         NEW_CRON="$CRON_JOB"
     fi
     
-    # Install the new crontab
     echo -e "$NEW_CRON" | crontab -
     echo "Cron job added: runs every 2 minutes with logging."
 fi
@@ -91,12 +86,23 @@ else
     echo "Setup script not found, skipping dependency installation."
 fi
 
-# Execute the main Python script
+# Execute the main Python script using virtual environment
 echo "Executing main.py..."
 cd "$REPO_DIR"
 
 if [ -f "main.py" ]; then
-    python3 main.py
+    if [ -d "$VENV_DIR" ]; then
+        echo "Using virtual environment to run main.py..."
+        source "$VENV_DIR/bin/activate"
+        python3 main.py
+        deactivate
+    else
+        echo "Virtual environment not found, creating it first..."
+        bash "$SETUP_SCRIPT"
+        source "$VENV_DIR/bin/activate"
+        python3 main.py
+        deactivate
+    fi
     echo "main.py execution completed."
 else
     echo "Warning: main.py not found in repository."
