@@ -42,7 +42,7 @@ else
 fi
 
 # Self-manage cron job - ensure it's set to run every 2 minutes
-CRON_JOB="*/2 * * * * $SCRIPT_DIR/$SCRIPT_NAME >> /home/pi300/script.log 2>&1"
+CRON_JOB="*/5 * * * * $SCRIPT_DIR/$SCRIPT_NAME >> /home/pi300/script.log 2>&1"
 
 # Get current crontab for user
 CURRENT_CRON=$(crontab -l 2>/dev/null || true)
