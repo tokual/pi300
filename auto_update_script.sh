@@ -6,6 +6,22 @@ SCRIPT_NAME="auto_update_script.sh"
 REPO_URL="https://github.com/tokual/pi300.git"
 REPO_DIR="/home/pi300/pi300"
 VENV_DIR="/home/pi300/pi300/venv"
+LOG_FILE="/home/pi300/script.log"
+
+# Function to clean old log files
+clean_old_logs() {
+    if [ -f "$LOG_FILE" ]; then
+        # Check if log file is older than 7 days
+        if [ $(find "$LOG_FILE" -mtime +7 -print | wc -l) -gt 0 ]; then
+            echo "Log file is older than 7 days. Deleting..."
+            rm "$LOG_FILE"
+            echo "Old log file deleted at $(date)" > "$LOG_FILE"
+        fi
+    fi
+}
+
+# Clean old logs before starting
+clean_old_logs
 
 # Navigate to the repository directory
 cd "$REPO_DIR" || {
@@ -46,7 +62,7 @@ else
 fi
 
 # Self-manage cron job - ensure it's set to run every 3 minutes
-CRON_JOB="*/3 * * * * $SCRIPT_DIR/$SCRIPT_NAME >> /home/pi300/script.log 2>&1"
+CRON_JOB="*/3 * * * * $SCRIPT_DIR/$SCRIPT_NAME >> $LOG_FILE 2>&1"
 
 # Get current crontab for user
 CURRENT_CRON=$(crontab -l 2>/dev/null || true)
