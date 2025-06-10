@@ -11,12 +11,42 @@ LOG_FILE="/home/pi300/script.log"
 # Function to clean old log files
 clean_old_logs() {
     if [ -f "$LOG_FILE" ]; then
-        # Check if log file is older than 7 days
-        if [ $(find "$LOG_FILE" -mtime +7 -print | wc -l) -gt 0 ]; then
-            echo "Log file is older than 7 days. Deleting..."
-            rm "$LOG_FILE"
-            echo "Old log file deleted at $(date)" > "$LOG_FILE"
+        # Get file birth time (creation date) in seconds since epoch
+        FILE_BIRTHTIME=$(stat -c %W "$LOG_FILE" 2>/dev/null || stat -f %B "$LOG_FILE" 2>/dev/null)
+        CURRENT_TIME=$(date +%s)
+        SEVEN_DAYS_AGO=$((CURRENT_TIME - 7 * 24 * 3600))
+        
+        # Calculate file age in human readable format
+        FILE_AGE_SECONDS=$((CURRENT_TIME - FILE_BIRTHTIME))
+        FILE_AGE_DAYS=$((FILE_AGE_SECONDS / 86400))
+        FILE_AGE_HOURS=$(((FILE_AGE_SECONDS % 86400) / 3600))
+        FILE_AGE_MINUTES=$(((FILE_AGE_SECONDS % 3600) / 60))
+        
+        # Format age string
+        if [ $FILE_AGE_DAYS -gt 0 ]; then
+            if [ $FILE_AGE_HOURS -gt 0 ]; then
+                AGE_STRING="${FILE_AGE_DAYS}d ${FILE_AGE_HOURS}h old"
+            else
+                AGE_STRING="${FILE_AGE_DAYS}d ${FILE_AGE_MINUTES}m old"
+            fi
+        elif [ $FILE_AGE_HOURS -gt 0 ]; then
+            AGE_STRING="${FILE_AGE_HOURS}h ${FILE_AGE_MINUTES}m old"
+        else
+            AGE_STRING="${FILE_AGE_MINUTES}m old"
         fi
+        
+        echo "Debug: File birth time=$FILE_BIRTHTIME, Current time=$CURRENT_TIME, Seven days ago=$SEVEN_DAYS_AGO"
+        echo "Log file is $AGE_STRING"
+        
+        if [ "$FILE_BIRTHTIME" -lt "$SEVEN_DAYS_AGO" ]; then
+            echo "Log file is older than 7 days ($AGE_STRING). Deleting..."
+            rm "$LOG_FILE"
+            echo "Log file deleted successfully."
+        else
+            echo "Log file is not old enough to delete ($AGE_STRING, less than 7 days old)."
+        fi
+    else
+        echo "No log file exists to clean."
     fi
 }
 
